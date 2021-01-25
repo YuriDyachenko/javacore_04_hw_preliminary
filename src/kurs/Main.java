@@ -10,10 +10,10 @@ public class Main {
 
     //размер матрицы не желательно делать больше 99, вывод таблицы станет "некрасивым"
     //минимальный размер матрицы 1, ошибки не будет и с 0, но как тогда ввести нужные координаты?
-    public static final int SIZE = 5;
+    public static final int SIZE = 3;
     //число символов победы можно дедать и больше размера матрицы, тогда всегда должна быть ничья
     //минимальное число тут тоже может быть даже 1
-    public static final int DOTS_TO_WIN = 4;
+    public static final int DOTS_TO_WIN = 3;
 
     public static final char DOT_EMPTY = ' ';
     public static final char DOT_X = 'X';
@@ -69,8 +69,11 @@ public class Main {
         //а если нет, то мы его почистим после каждой неудачной проверки
         int[][] coordinatesWin = createCoordinates();
 
+        //пусть жребий решит, кто начинает первым игру
+        int whoIsStarting = new Random().nextInt(2) + HUMAN;
+
         //выводим условия игры
-        outGameHeader();
+        outGameHeader(whoIsStarting == AI);
 
         //все приходится передавать в метод параметрами
         printMap(map, horLine, coordinatesWin);
@@ -79,15 +82,22 @@ public class Main {
         int winner = DEAD_HEAD;
 
         do {
-            //возможность играть ИИ против ИИ
-            if (AI_VS_AI) {
-                aiTurn(map, DOT_X);
-            } else {
-                //если хотят выйти, получим "Вы сдались"
-                if (!humanTurn(map, scanner)) {
-                    winner = BREAK;
-                    break;
+
+            //любой, кто начинает, начинает крестиками
+            //если начинает человек
+            if (whoIsStarting == HUMAN) {
+                //возможность играть ИИ против ИИ
+                if (AI_VS_AI) {
+                    aiTurn(map, DOT_X);
+                } else {
+                    //если хотят выйти, получим "Вы сдались"
+                    if (!humanTurn(map, scanner, DOT_X)) {
+                        winner = BREAK;
+                        break;
+                    }
                 }
+            } else {
+                aiTurn(map, DOT_X);
             }
 
             //чтобы отобразить победную строку/колонку/ряд
@@ -95,16 +105,31 @@ public class Main {
             int hasWin = checkSome(map, coordinatesWin, DOT_X, DOTS_TO_WIN, null);
             printMap(map, horLine, coordinatesWin);
             if (hasWin != NONE) {
-                winner = HUMAN;
+                winner = whoIsStarting;
                 break;
             }
 
-            //АИ - все по аналогии, только захотеть выйти он не может
-            aiTurn(map, DOT_O);
+            //второй всегда играет ноликами
+            if (whoIsStarting == HUMAN) {
+                //АИ - все по аналогии, только захотеть выйти он не может
+                aiTurn(map, DOT_O);
+            } else {
+                //возможность играть ИИ против ИИ
+                if (AI_VS_AI) {
+                    aiTurn(map, DOT_O);
+                } else {
+                    //если хотят выйти, получим "Вы сдались"
+                    if (!humanTurn(map, scanner, DOT_O)) {
+                        winner = BREAK;
+                        break;
+                    }
+                }
+            }
+
             hasWin = checkSome(map, coordinatesWin, DOT_O, DOTS_TO_WIN, null);
             printMap(map, horLine, coordinatesWin);
             if (hasWin != NONE) {
-                winner = AI;
+                winner = whoIsStarting == HUMAN ? AI : HUMAN;
                 break;
             }
 
@@ -117,11 +142,11 @@ public class Main {
         scanner.close();
     }
 
-    private static void outGameHeader() {
-        System.out.println("Играем в крестики-нолики с ИИ");
+    private static void outGameHeader(boolean thisIsAI) {
+        System.out.printf("Играем в крестики-нолики (первый ход - %c)\n", DOT_X);
         System.out.printf("Размер матрицы: %dх%d, число %c|%c для выигрыша: %d\n",
                 SIZE, SIZE, DOT_X, DOT_O, DOTS_TO_WIN);
-        System.out.println("Вы начинаете...");
+        System.out.println(thisIsAI ? "Начинает ИИ..." : AI_VS_AI ? "За Вас начинает другой ИИ..." : "Вы начинаете...");
     }
 
     private static int[][] createCoordinates() {
@@ -362,11 +387,14 @@ public class Main {
         return false;
     }
 
-    private static boolean humanTurn(char[][] map, Scanner scanner) {
+    private static boolean humanTurn(char[][] map, Scanner scanner, char charWin) {
         //ход человека
         int x, y;
 
         do {
+
+            //теперь (рандомный старт) может и у человека быть такой случай, что все заполнено
+            if (!mapIsNotFull(map)) return true;
 
             System.out.printf("Введите X Y (две координаты от 1 до %d через пробел, 0 для выхода): ", SIZE);
             x = scanner.nextInt() - 1;
@@ -379,7 +407,7 @@ public class Main {
         } while (isNotCellValid(map, x, y));
 
         //ставим точку
-        putToMap(map, DOT_X, x, y);
+        putToMap(map, charWin, x, y);
         System.out.printf("Ваш \"ход\" сделан в ячейку {%d, %d}\n", x + 1, y + 1);
 
         //если ход сделан, вернем ИСТИНУ
@@ -389,7 +417,7 @@ public class Main {
     private static void aiTurn(char[][] map, char charWin) {
         //ход ИИ
         //передаем сюда символ победы, потому что ИИ может играть сам с собой
-        String otherAI = (charWin == DOT_X) ? " (который за Вас)" : "";
+        String otherAI = (charWin == DOT_X && AI_VS_AI) ? " (который за Вас)" : "";
 
         //получается, что ИИ все время только блокирует, а если у него есть
         //последовательность, где достаточно поставить один символ и будет победа
@@ -524,7 +552,8 @@ public class Main {
         return xy;
     }
 
-    private static int[] putInMapInsideOrLeftOrRight(char[][] map, char charWin, int[][] coordinates, int[] xyInside, int typeOfCoordinates) {
+    private static int[] putInMapInsideOrLeftOrRight(char[][] map, char charWin, int[][] coordinates,
+                                                     int[] xyInside, int typeOfCoordinates) {
         //прежде всего проверим, может есть точка/место внутри последовательности
         //она пришла в оттельной переменной
         if (!isEmptyXY(xyInside)) {
